@@ -7,9 +7,12 @@ import PanbarCore
 
 let showAll = CommandLine.arguments.contains("--all")
 
+let desktops = SpaceResolver.currentDesktops()
+
 func printWorkspace(_ workspace: WorkspaceState) {
     let marker = workspace.active ? " (active)" : ""
-    print("Space \(workspace.nativeWorkspaceID)\(marker)")
+    let name = desktops[workspace.nativeWorkspaceID]?.title ?? "Space \(workspace.nativeWorkspaceID)"
+    print("\(name)\(marker)")
     if workspace.windows.isEmpty {
         print("  (no windows)")
     }
