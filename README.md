@@ -5,6 +5,11 @@
 A macOS menu bar companion for [Paneru](https://github.com/karinushka/paneru),
 the sliding, tiling window manager.
 
+> [!NOTE]
+> Panbar is a hobby project I built for my own setup. It isn't affiliated with
+> Paneru, and it comes with no guarantees of support or updates. Issues and pull
+> requests are welcome, but responses may be slow.
+
 <img src="docs/strip.png" alt="Panbar in the menu bar: Desktop 4, with T3 Code scrolled off-screen and Icon Composer focused" width="122">
 
 Paneru lays windows out on a strip that scrolls past the edges of the screen,
@@ -24,6 +29,15 @@ and counts the rest (`+3`) at either end.
 
 - macOS 14 or later
 - Paneru 0.4.2 or later, running. Panbar is developed against 0.5.2.
+
+## Limitations
+
+- **Only macOS Desktops are supported, not Paneru's virtual workspaces.**
+  Panbar numbers and tracks the Desktops (Spaces) you see in Mission Control.
+  Paneru can also stack several virtual workspace rows on one Desktop; Panbar
+  doesn't show which row you're on and isn't tested with them.
+- Panbar shows the Desktop of the display with focus. On multiple displays,
+  every menu bar shows that same Desktop.
 
 ## Install
 
@@ -63,8 +77,6 @@ Choose **Launch at Login** from Panbar's menu.
 - **Desktop numbers** come from a private macOS API
   (`CGSCopyManagedDisplaySpaces`), the same one yabai uses, because Paneru
   reports internal Space IDs rather than the numbers Mission Control shows.
-- **Paneru's virtual workspaces** (several rows on one Desktop) aren't shown
-  separately yet.
 
 ## How it works
 
