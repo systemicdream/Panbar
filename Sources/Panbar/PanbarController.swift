@@ -1,5 +1,6 @@
 import AppKit
 import PanbarCore
+import ServiceManagement
 
 /// Owns the status item and keeps it in sync with Paneru.
 ///
@@ -19,6 +20,10 @@ final class PanbarController: NSObject, NSMenuDelegate {
     private var desktops: [UInt64: Desktop] = [:]
     private var lastError: String?
 
+    /// The width budget the current image was drawn for.
+    private var renderedBudget: CGFloat?
+    private var layoutTimer: Timer?
+
     private var refreshInFlight = false
     private var refreshPending = false
     private var restartDelay: TimeInterval = 1
@@ -31,7 +36,34 @@ final class PanbarController: NSObject, NSMenuDelegate {
         statusItem.menu = menu
         statusItem.button?.imagePosition = .imageOnly
         render()
+        watchMenuBarLayout()
         connect()
+    }
+
+    /// Other apps' status items come and go without telling anyone, so the
+    /// room before the notch is rechecked when our item moves, when screens
+    /// change, and every few seconds as a fallback.
+    private func watchMenuBarLayout() {
+        let center = NotificationCenter.default
+        let recheck: @Sendable (Notification) -> Void = { [weak self] _ in
+            MainActor.assumeIsolated { self?.renderIfBudgetChanged() }
+        }
+        if let window = statusItem.button?.window {
+            center.addObserver(forName: NSWindow.didMoveNotification, object: window, queue: .main, using: recheck)
+        }
+        center.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main, using: recheck
+        )
+        layoutTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.renderIfBudgetChanged() }
+        }
+    }
+
+    private func renderIfBudgetChanged() {
+        guard lastError == nil, let button = statusItem.button,
+              maxImageWidth(of: button) != renderedBudget
+        else { return }
+        render()
     }
 
     // MARK: - Paneru
@@ -122,7 +154,9 @@ final class PanbarController: NSObject, NSMenuDelegate {
             return
         }
         let label = state?.activeWorkspace.flatMap(desktop(for:))?.shortTitle
-        let image = renderer.image(for: activeWindows, label: label)
+        let budget = maxImageWidth(of: button)
+        renderedBudget = budget
+        let image = renderer.image(for: activeWindows, label: label, maxWidth: budget)
         button.image = image
         button.toolTip = nil
         if let path = ProcessInfo.processInfo.environment["PANBAR_DEBUG_SNAPSHOT"] {
@@ -148,6 +182,16 @@ final class PanbarController: NSObject, NSMenuDelegate {
         }
         NSGraphicsContext.restoreGraphicsState()
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+    }
+
+    /// The menu bar room left for the strip image, after the button's own
+    /// padding around it.
+    private func maxImageWidth(of button: NSStatusBarButton) -> CGFloat? {
+        guard let window = button.window,
+              let available = MenuBarSpace.availableWidth(for: window)
+        else { return nil }
+        let padding = max(0, window.frame.width - (button.image?.size.width ?? 0))
+        return available - padding
     }
 
     private func show(error: Error) {
@@ -180,6 +224,7 @@ final class PanbarController: NSObject, NSMenuDelegate {
 
         menu.addItem(.separator())
         menu.addItem(actionItem("Refresh", #selector(refreshClicked), key: "r"))
+        menu.addItem(launchAtLoginItem())
         menu.addItem(actionItem("Quit Panbar", #selector(quitClicked), key: "q"))
     }
 
@@ -212,6 +257,31 @@ final class PanbarController: NSObject, NSMenuDelegate {
 
     private func truncate(_ string: String, to length: Int) -> String {
         string.count > length ? String(string.prefix(length - 1)) + "…" : string
+    }
+
+    /// Login items need a real app bundle, so this is disabled under `swift run`.
+    private func launchAtLoginItem() -> NSMenuItem {
+        let item = actionItem("Launch at Login", #selector(launchAtLoginClicked), key: "")
+        let isBundled = Bundle.main.bundleURL.pathExtension == "app"
+        item.isEnabled = isBundled
+        item.state = isBundled && SMAppService.mainApp.status == .enabled ? .on : .off
+        return item
+    }
+
+    @objc private func launchAtLoginClicked() {
+        let service = SMAppService.mainApp
+        do {
+            if service.status == .enabled {
+                try service.unregister()
+            } else {
+                try service.register()
+            }
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.messageText = "Couldn't change Launch at Login"
+            NSApp.activate()
+            alert.runModal()
+        }
     }
 
     @objc private func refreshClicked() {

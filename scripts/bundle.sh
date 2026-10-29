@@ -1,5 +1,7 @@
 #!/bin/bash
 # Builds Panbar in release mode and wraps it in build/Panbar.app.
+#   --install   also copy it to ~/Applications and relaunch it there, which
+#               gives Launch at Login a stable location to point at
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -35,3 +37,13 @@ PLIST
 
 codesign --force --sign - "$app"
 echo "Built $app"
+
+if [[ "${1:-}" == "--install" ]]; then
+    dest="$HOME/Applications/Panbar.app"
+    pkill -x Panbar || true
+    mkdir -p "$HOME/Applications"
+    rm -rf "$dest"
+    cp -R "$app" "$dest"
+    open "$dest"
+    echo "Installed $dest"
+fi
