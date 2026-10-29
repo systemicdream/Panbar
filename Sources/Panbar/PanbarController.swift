@@ -151,6 +151,7 @@ final class PanbarController: NSObject, NSMenuDelegate {
                 systemSymbolName: "exclamationmark.triangle", accessibilityDescription: "Panbar error"
             )
             button.toolTip = lastError
+            button.setAccessibilityLabel("Panbar: \(lastError ?? "error")")
             return
         }
         let label = state?.activeWorkspace.flatMap(desktop(for:))?.shortTitle
@@ -159,6 +160,12 @@ final class PanbarController: NSObject, NSMenuDelegate {
         let image = renderer.image(for: activeWindows, label: label, maxWidth: budget)
         button.image = image
         button.toolTip = nil
+        // The strip is an image, so describe it for VoiceOver.
+        let desktopName = state?.activeWorkspace.flatMap(desktop(for:))?.title ?? "Panbar"
+        let appNames = activeWindows.map { $0.focused ? "\($0.appName), focused" : $0.appName }
+        button.setAccessibilityLabel(
+            appNames.isEmpty ? "\(desktopName): no windows" : "\(desktopName): \(appNames.joined(separator: "; "))"
+        )
         if let path = ProcessInfo.processInfo.environment["PANBAR_DEBUG_SNAPSHOT"] {
             writeSnapshot(of: image, appearance: button.effectiveAppearance, to: path)
         }
